@@ -1,3 +1,5 @@
+const { Temporal } = require('@js-temporal/polyfill');
+
 const RAD_TO_DEG = 180 / Math.PI;
 const MS_TO_KN = 1.9438444924406046;
 // Signal K keeps the last known value of a path around indefinitely, so measured
@@ -5,6 +7,14 @@ const MS_TO_KN = 1.9438444924406046;
 const MAX_AGE_MS = 60000;
 // Values that are set once and stay valid until changed
 const NO_MAX_AGE = 0;
+const WIND_PATH = 'environment.wind.speedTrue';
+const HISTORY_WINDOW = Temporal.Duration.from({ minutes: 10 });
+// History buckets are aligned to the clock rather than to the query, so the
+// bucket a window ends in is only partly filled. Asking for one second buckets
+// sidesteps that: with wind arriving about once a second we get the samples
+// themselves back, and can cut the windows we actually want out of them
+const HISTORY_RESOLUTION = 1;
+const RECENT_WINDOW_MS = 60000;
 
 function selfValue(app, path, maxAge = MAX_AGE_MS) {
   const data = app.getSelfPath(path);
@@ -22,6 +32,10 @@ function selfValue(app, path, maxAge = MAX_AGE_MS) {
     }
   }
   return data.value;
+}
+
+function knots(value) {
+  return (value * MS_TO_KN).toFixed(1);
 }
 
 function degrees(radians) {
@@ -69,7 +83,7 @@ function windStatus(app) {
     return 'Wind: n/a';
   }
   const parts = [
-    Number.isFinite(speed) ? `${(speed * MS_TO_KN).toFixed(1)}kn` : 'n/a',
+    Number.isFinite(speed) ? `${knots(speed)}kn` : 'n/a',
   ];
   if (direction) {
     parts.push(`${direction}T`);
@@ -77,16 +91,71 @@ function windStatus(app) {
   return `Wind: ${parts.join(' ')}`;
 }
 
+function stats(rows) {
+  if (!rows.length) {
+    return undefined;
+  }
+  const averages = rows.map((row) => row[2]);
+  return {
+    average: averages.reduce((sum, value) => sum + value, 0) / averages.length,
+    max: rows.reduce((prev, row) => (row[1] > prev ? row[1] : prev), rows[0][1]),
+  };
+}
+
+function summarize(values) {
+  // Rows are [timestamp, max, average], in the order the path specs were given
+  const rows = values.data.filter((row) => Number.isFinite(row[1]) && Number.isFinite(row[2]));
+  if (!rows.length) {
+    return undefined;
+  }
+  const until = values.range && values.range.to
+    ? new Date(values.range.to).getTime()
+    : Date.now();
+  const recent = rows.filter((row) => new Date(row[0]).getTime() >= until - RECENT_WINDOW_MS);
+  return {
+    tenMinutes: stats(rows),
+    // Empty when the wind data stopped over a minute ago
+    oneMinute: stats(recent),
+  };
+}
+
+function windHistory(app) {
+  if (typeof app.getHistoryApi !== 'function') {
+    // Signal K server without the history API
+    return Promise.resolve(undefined);
+  }
+  return app.getHistoryApi()
+    .then((history) => history.getValues({
+      context: app.selfContext || 'vessels.self',
+      duration: HISTORY_WINDOW,
+      resolution: HISTORY_RESOLUTION,
+      pathSpecs: [
+        { path: WIND_PATH, aggregate: 'max', parameter: [] },
+        { path: WIND_PATH, aggregate: 'average', parameter: [] },
+      ],
+    }))
+    .then((values) => summarize(values))
+    // No history provider configured, or the query failed. Report what we have
+    .catch(() => undefined);
+}
+
 module.exports = {
   crewOnly: false,
   example: 'Status',
   accept: (msg) => (msg.data.toLowerCase() === 'status'),
-  handle: (msg, settings, device, app) => {
-    const status = [
-      anchorStatus(app, settings),
-      depthStatus(app),
-      windStatus(app),
-    ].join('\n');
-    return device.sendText(status, msg.from, true, false);
-  },
+  handle: (msg, settings, device, app) => windHistory(app)
+    .then((history) => {
+      const status = [
+        anchorStatus(app, settings),
+        depthStatus(app),
+        windStatus(app),
+      ];
+      if (history && history.oneMinute) {
+        status.push(`Wind 1m: avg ${knots(history.oneMinute.average)} max ${knots(history.oneMinute.max)}kn`);
+      }
+      if (history) {
+        status.push(`Wind 10m: avg ${knots(history.tenMinutes.average)} max ${knots(history.tenMinutes.max)}kn`);
+      }
+      return device.sendText(status.join('\n'), msg.from, true, false);
+    }),
 };

@@ -269,6 +269,11 @@ module.exports = (app) => {
 
     const nodeDbFile = join(app.getDataDirPath(), 'node-db.json');
 
+    const anchorRadiusPath = (settings.communications
+      && settings.communications.anchor_radius_path)
+      || 'navigation.anchor.distanceFromBow';
+    telemetry.setAnchorRadiusPath(anchorRadiusPath);
+
     publishInterval = setInterval(() => {
       if (!device) {
         // Not connected to Meshtastic yet
@@ -834,7 +839,7 @@ module.exports = (app) => {
                 period: 1000,
               },
               {
-                path: 'navigation.anchor.distanceFromBow',
+                path: anchorRadiusPath,
                 period: 1000,
               },
               {
@@ -1047,6 +1052,21 @@ module.exports = (app) => {
               type: 'boolean',
               title: 'Send environment metrics (wind, temperature, etc) to Meshtastic',
               default: false,
+            },
+            anchor_radius_path: {
+              type: 'string',
+              default: 'navigation.anchor.distanceFromBow',
+              title: 'Signal K path to use for the anchor radius reported in environment metrics',
+              oneOf: [
+                {
+                  const: 'navigation.anchor.distanceFromBow',
+                  title: 'navigation.anchor.distanceFromBow (anchor rode deployed)',
+                },
+                {
+                  const: 'navigation.anchor.currentRadius',
+                  title: 'navigation.anchor.currentRadius (current distance from anchor)',
+                },
+              ],
             },
             digital_switching: {
               type: 'boolean',

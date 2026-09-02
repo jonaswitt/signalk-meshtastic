@@ -39,7 +39,7 @@ In production use on several boats.
   * Query anchor, depth and wind status (_"Status"_)
   * Share Meshtastic waypoints for AIS targets (_"Waypoint DH8613"_)
   * Control digital switching (_"Turn decklight on"_). Opt-in.
-* Share weather station data from Signal K (wind, temperature, etc) over Meshtastic. Opt-in.
+* Share weather station data from Signal K (wind, temperature, etc) over Meshtastic every four minutes, or at a configurable interval.
 * Show position-sharing Meshtastic nodes as vessels in Freeboard etc. Opt-in.
   * Associate Meshtastic nodes with other (AIS) vessels based on the `Some node name DE <callsign>` pattern
 

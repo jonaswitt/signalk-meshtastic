@@ -1,5 +1,7 @@
 const { Temporal } = require('@js-temporal/polyfill');
 
+const { anchorRadiusPath } = require('../settings');
+
 const RAD_TO_DEG = 180 / Math.PI;
 const MS_TO_KN = 1.9438444924406046;
 // Signal K keeps the last known value of a path around indefinitely, so measured
@@ -51,9 +53,7 @@ function anchorStatus(app, settings) {
   if (!position || !Number.isFinite(position.latitude)) {
     return 'Anchor: not set';
   }
-  const radiusPath = (settings.communications && settings.communications.anchor_radius_path)
-    || 'navigation.anchor.distanceFromBow';
-  const radius = selfValue(app, radiusPath);
+  const radius = selfValue(app, anchorRadiusPath(settings));
   const bearing = degrees(selfValue(app, 'navigation.anchor.bearingTrue'));
   const maxRadius = selfValue(app, 'navigation.anchor.maxRadius', NO_MAX_AGE);
   const parts = [

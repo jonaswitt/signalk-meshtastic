@@ -5,6 +5,11 @@ const Telemetry = require('./telemetry');
 const commands = require('./commands/index');
 const { sendMOB } = require('./waypoint');
 const { sendNotification } = require('./notifications');
+const {
+  environmentMetricsInterval,
+  anchorRadiusPath,
+  DEFAULT_METRICS_INTERVAL,
+} = require('./settings');
 
 if (!global.crypto) {
   // Older Node.js versions (like the one bundled in Venus OS
@@ -269,42 +274,38 @@ module.exports = (app) => {
 
     const nodeDbFile = join(app.getDataDirPath(), 'node-db.json');
 
-    const anchorRadiusPath = (settings.communications
-      && settings.communications.anchor_radius_path)
-      || 'navigation.anchor.distanceFromBow';
-    telemetry.setAnchorRadiusPath(anchorRadiusPath);
+    telemetry.setAnchorRadiusPath(anchorRadiusPath(settings));
 
-    publishInterval = setInterval(() => {
-      if (!device) {
+    const metricsInterval = environmentMetricsInterval(settings);
+    if (metricsInterval > 0) {
+      publishInterval = setInterval(() => {
+        if (!device) {
         // Not connected to Meshtastic yet
-        return;
-      }
-      if (!settings.communications || !settings.communications.send_environment_metrics) {
-        // Metrics sending disabled
-        return;
-      }
-      const values = telemetry.toMeshtastic();
-      if (Object.keys(values).length === 0) {
-        // No telemetry to send
-        return;
-      }
-      const telemetryMessage = create(Protobuf.Telemetry.TelemetrySchema, {
-        time: Math.floor(new Date().getTime() / 1000),
-        variant: {
-          case: 'environmentMetrics',
-          value: create(Protobuf.Telemetry.EnvironmentMetricsSchema, values),
-        },
-      });
-      device.sendPacket(
-        toBinary(Protobuf.Telemetry.TelemetrySchema, telemetryMessage),
-        Protobuf.Portnums.PortNum.TELEMETRY_APP,
-        'broadcast',
-        0,
-        true,
-        false,
-      )
-        .catch((e) => app.error(`Failed to send telemetry: ${e.message}`));
-    }, 60000 * 4);
+          return;
+        }
+        const values = telemetry.toMeshtastic();
+        if (Object.keys(values).length === 0) {
+          // No telemetry to send
+          return;
+        }
+        const telemetryMessage = create(Protobuf.Telemetry.TelemetrySchema, {
+          time: Math.floor(new Date().getTime() / 1000),
+          variant: {
+            case: 'environmentMetrics',
+            value: create(Protobuf.Telemetry.EnvironmentMetricsSchema, values),
+          },
+        });
+        device.sendPacket(
+          toBinary(Protobuf.Telemetry.TelemetrySchema, telemetryMessage),
+          Protobuf.Portnums.PortNum.TELEMETRY_APP,
+          'broadcast',
+          0,
+          true,
+          false,
+        )
+          .catch((e) => app.error(`Failed to send telemetry: ${e.message}`));
+      }, metricsInterval * 1000);
+    }
 
     function setWatchdog() {
       // Clear previous watchdog
@@ -839,7 +840,7 @@ module.exports = (app) => {
                 period: 1000,
               },
               {
-                path: anchorRadiusPath,
+                path: anchorRadiusPath(settings),
                 period: 1000,
               },
               {
@@ -920,6 +921,7 @@ module.exports = (app) => {
   plugin.stop = () => {
     if (publishInterval) {
       clearInterval(publishInterval);
+      publishInterval = undefined;
     }
     if (watchdog) {
       clearTimeout(watchdog);
@@ -1048,10 +1050,11 @@ module.exports = (app) => {
               title: 'Send alerts to crew via Meshtastic',
               default: true,
             },
-            send_environment_metrics: {
-              type: 'boolean',
-              title: 'Send environment metrics (wind, temperature, etc) to Meshtastic',
-              default: false,
+            environment_metrics_interval: {
+              type: 'integer',
+              title: 'How often to send environment metrics (wind, temperature, etc) to Meshtastic, in seconds. Set to 0 to disable',
+              default: DEFAULT_METRICS_INTERVAL,
+              minimum: 0,
             },
             anchor_radius_path: {
               type: 'string',

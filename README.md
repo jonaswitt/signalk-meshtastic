@@ -36,6 +36,7 @@ In production use on several boats.
 * Send Signal K alerts as Meshtastic text messages to crew
   * MOB alerts (for example from [signalk-mob-notifier](https://github.com/meri-imperiumi/signalk-mob-notifier)) also send a waypoint to the MOB beacon
 * Control Signal K with Meshtastic direct messages:
+  * Query anchor, depth and wind status (_"Status"_)
   * Share Meshtastic waypoints for AIS targets (_"Waypoint DH8613"_)
   * Control digital switching (_"Turn decklight on"_). Opt-in.
 * Share weather station data from Signal K (wind, temperature, etc) over Meshtastic. Opt-in.

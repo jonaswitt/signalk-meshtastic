@@ -1,4 +1,5 @@
 exports.ping = require('./ping');
+exports.status = require('./status');
 exports.switching = require('./switching');
 exports.waypoint = require('./waypoint');
 

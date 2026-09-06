@@ -1,7 +1,12 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
 
-const { environmentMetricsInterval, anchorRadiusPath } = require('../plugin/settings');
+const {
+  environmentMetricsInterval,
+  anchorRadiusPath,
+  nodeRole,
+  sendAlerts,
+} = require('../plugin/settings');
 
 describe('environment metrics interval', () => {
   it('defaults to every four minutes', () => {
@@ -49,5 +54,36 @@ describe('anchor radius path', () => {
     assert.equal(anchorRadiusPath({
       communications: { anchor_radius_path: 'navigation.anchor.currentRadius' },
     }), 'navigation.anchor.currentRadius');
+  });
+});
+
+describe('node role', () => {
+  const settings = {
+    nodes: [
+      { node: 1234, role: 'crew' },
+      { node: 5678, role: 'dinghy' },
+    ],
+  };
+
+  it('returns the configured role for a node', () => {
+    assert.equal(nodeRole(settings, 1234), 'crew');
+    assert.equal(nodeRole(settings, 5678), 'dinghy');
+  });
+
+  it('returns undefined for unconfigured nodes', () => {
+    assert.equal(nodeRole(settings, 9999), undefined);
+    assert.equal(nodeRole({}, 1234), undefined);
+    assert.equal(nodeRole(undefined, 1234), undefined);
+  });
+});
+
+describe('send alerts', () => {
+  it('is off unless enabled', () => {
+    assert.equal(sendAlerts({}), false);
+    assert.equal(sendAlerts({ communications: { send_alerts: false } }), false);
+  });
+
+  it('is on when enabled', () => {
+    assert.equal(sendAlerts({ communications: { send_alerts: true } }), true);
   });
 });

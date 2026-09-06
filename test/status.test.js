@@ -65,7 +65,7 @@ describe('status command', () => {
     'environment.wind.directionTrue': 4.276,
   })
     .then((sent) => {
-      assert.equal(sent, 'Anchor: not set\nDepth: 4.2m\nWind: 12.2kn 245T');
+      assert.equal(sent, 'Anchor: not set\nDepth: 4.2m\nWind: 12.2kn 245T\nNode: not configured, no alerts');
     }));
 
   it('reports anchor radius, bearing and max radius when anchored', () => handle({
@@ -78,7 +78,7 @@ describe('status command', () => {
     'environment.wind.directionTrue': 4.276,
   })
     .then((sent) => {
-      assert.equal(sent, 'Anchor: 32m 145T max 40m\nDepth: 4.2m\nWind: 12.2kn 245T');
+      assert.equal(sent, 'Anchor: 32m 145T max 40m\nDepth: 4.2m\nWind: 12.2kn 245T\nNode: not configured, no alerts');
     }));
 
   it('ignores measured values that have gone stale', () => handle({
@@ -98,7 +98,7 @@ describe('status command', () => {
     'environment.wind.directionTrue': ago(300),
   })
     .then((sent) => {
-      assert.equal(sent, 'Anchor: 32m 145T max 40m\nDepth: n/a\nWind: n/a');
+      assert.equal(sent, 'Anchor: 32m 145T max 40m\nDepth: n/a\nWind: n/a\nNode: not configured, no alerts');
     }));
 
   it('uses the configured anchor radius path', () => handle({
@@ -111,7 +111,60 @@ describe('status command', () => {
     },
   })
     .then((sent) => {
-      assert.equal(sent, 'Anchor: 25m\nDepth: n/a\nWind: n/a');
+      assert.equal(sent, 'Anchor: 25m\nDepth: n/a\nWind: n/a\nNode: not configured, no alerts');
+    }));
+});
+
+describe('status command node role', () => {
+  const nodes = [
+    { node: 1, role: 'crew' },
+    { node: 2, role: 'dinghy' },
+    { node: 3, role: 'onboard' },
+  ];
+
+  function roleLine(from, settings) {
+    let sent;
+    const device = {
+      sendText: (text, to) => {
+        assert.equal(to, from);
+        sent = text;
+        return Promise.resolve();
+      },
+    };
+    return status.handle({ data: 'Status', from }, settings, device, mockApp({}))
+      .then(() => sent.split('\n').pop());
+  }
+
+  it('confirms a crew node will receive alerts', () => roleLine(1, {
+    nodes,
+    communications: { send_alerts: true },
+  })
+    .then((line) => {
+      assert.equal(line, 'Node: crew, alerts on');
+    }));
+
+  it('warns a crew node when alert sending is disabled', () => roleLine(1, {
+    nodes,
+    communications: { send_alerts: false },
+  })
+    .then((line) => {
+      assert.equal(line, 'Node: crew, alerts off');
+    }));
+
+  it('reports other configured roles as not receiving alerts', () => Promise.all([
+    roleLine(2, { nodes, communications: { send_alerts: true } }),
+    roleLine(3, { nodes, communications: { send_alerts: true } }),
+  ])
+    .then((lines) => {
+      assert.deepEqual(lines, ['Node: dinghy, no alerts', 'Node: onboard, no alerts']);
+    }));
+
+  it('reports an unconfigured node even when alerts are enabled', () => roleLine(4, {
+    nodes,
+    communications: { send_alerts: true },
+  })
+    .then((line) => {
+      assert.equal(line, 'Node: not configured, no alerts');
     }));
 });
 
@@ -141,6 +194,7 @@ describe('status command wind history', () => {
         'Wind 1m: avg 11.7 max 13.6kn',
         // Whole window: avg of all five = 6.4 m/s, max 12.0 m/s
         'Wind 10m: avg 12.4 max 23.3kn',
+        'Node: not configured, no alerts',
       ].join('\n'));
     }));
 
@@ -158,25 +212,26 @@ describe('status command wind history', () => {
         'Depth: n/a',
         'Wind: 12.2kn 245T',
         'Wind 10m: avg 12.4 max 23.3kn',
+        'Node: not configured, no alerts',
       ].join('\n'));
     }));
 
   it('skips history on a server without the history API', () => handle(wind)
     .then((sent) => {
-      assert.equal(sent, 'Anchor: not set\nDepth: n/a\nWind: 12.2kn 245T');
+      assert.equal(sent, 'Anchor: not set\nDepth: n/a\nWind: 12.2kn 245T\nNode: not configured, no alerts');
     }));
 
   it('skips history when no provider is configured', () => handle(wind, {}, {}, {
     getHistoryApi: () => Promise.reject(new Error('No history api provider configured')),
   })
     .then((sent) => {
-      assert.equal(sent, 'Anchor: not set\nDepth: n/a\nWind: 12.2kn 245T');
+      assert.equal(sent, 'Anchor: not set\nDepth: n/a\nWind: 12.2kn 245T\nNode: not configured, no alerts');
     }));
 
   it('skips history when the provider returns no usable rows', () => handle(wind, {}, {}, historyApp([
     ['2026-09-02T02:45:00.000Z', null, null],
   ]))
     .then((sent) => {
-      assert.equal(sent, 'Anchor: not set\nDepth: n/a\nWind: 12.2kn 245T');
+      assert.equal(sent, 'Anchor: not set\nDepth: n/a\nWind: 12.2kn 245T\nNode: not configured, no alerts');
     }));
 });

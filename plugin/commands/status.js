@@ -1,6 +1,6 @@
 const { Temporal } = require('@js-temporal/polyfill');
 
-const { anchorRadiusPath } = require('../settings');
+const { anchorRadiusPath, nodeRole, sendAlerts } = require('../settings');
 
 const RAD_TO_DEG = 180 / Math.PI;
 const MS_TO_KN = 1.9438444924406046;
@@ -91,6 +91,16 @@ function windStatus(app) {
   return `Wind: ${parts.join(' ')}`;
 }
 
+// Node identities get reset, so confirm the asking node is still configured
+// the way its owner expects. Only crew nodes receive anchor and other alerts
+function nodeStatus(msg, settings) {
+  const role = nodeRole(settings, msg.from);
+  if (role !== 'crew') {
+    return `Node: ${role || 'not configured'}, no alerts`;
+  }
+  return `Node: crew, alerts ${sendAlerts(settings) ? 'on' : 'off'}`;
+}
+
 function stats(rows) {
   if (!rows.length) {
     return undefined;
@@ -156,6 +166,7 @@ module.exports = {
       if (history) {
         status.push(`Wind 10m: avg ${knots(history.tenMinutes.average)} max ${knots(history.tenMinutes.max)}kn`);
       }
+      status.push(nodeStatus(msg, settings));
       return device.sendText(status.join('\n'), msg.from, true, false);
     }),
 };

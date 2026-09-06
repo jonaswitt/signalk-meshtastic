@@ -22,8 +22,22 @@ function anchorRadiusPath(settings) {
   return communications(settings).anchor_radius_path || DEFAULT_ANCHOR_RADIUS_PATH;
 }
 
+// Role ('crew', 'dinghy', 'onboard') this node has been given in the plugin
+// configuration, or undefined for nodes we know nothing about
+function nodeRole(settings, nodeNum) {
+  const nodes = (settings && settings.nodes) || [];
+  const configured = nodes.find((node) => node.node === nodeNum);
+  return configured ? configured.role : undefined;
+}
+
+function sendAlerts(settings) {
+  return Boolean(communications(settings).send_alerts);
+}
+
 module.exports = {
   environmentMetricsInterval,
   anchorRadiusPath,
+  nodeRole,
+  sendAlerts,
   DEFAULT_METRICS_INTERVAL,
 };

@@ -34,10 +34,27 @@ function sendAlerts(settings) {
   return Boolean(communications(settings).send_alerts);
 }
 
+// Extra Signal K paths to report in the status reply, each with the label to
+// show it under. Entries without a path are skipped, a missing label falls
+// back to the path itself
+function statusPaths(settings) {
+  const configured = communications(settings).status_paths;
+  if (!Array.isArray(configured)) {
+    return [];
+  }
+  return configured
+    .filter((entry) => entry && typeof entry.path === 'string' && entry.path.trim())
+    .map((entry) => ({
+      path: entry.path.trim(),
+      label: (typeof entry.label === 'string' && entry.label.trim()) || entry.path.trim(),
+    }));
+}
+
 module.exports = {
   environmentMetricsInterval,
   anchorRadiusPath,
   nodeRole,
   sendAlerts,
+  statusPaths,
   DEFAULT_METRICS_INTERVAL,
 };

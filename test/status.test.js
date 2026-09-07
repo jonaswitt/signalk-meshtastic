@@ -115,6 +115,74 @@ describe('status command', () => {
     }));
 });
 
+describe('status command configured paths', () => {
+  const settings = {
+    communications: {
+      status_paths: [
+        { path: 'networking.wan.activeLabel', label: 'WAN' },
+        { path: 'networking.wan.state', label: 'Online' },
+      ],
+    },
+  };
+
+  it('reports configured paths with their labels before the node line', () => handle({
+    'networking.wan.activeLabel': 'Cellular',
+    'networking.wan.state': 'online',
+  }, settings)
+    .then((sent) => {
+      assert.equal(sent, [
+        'Anchor: not set',
+        'Depth: n/a',
+        'Wind: n/a',
+        'WAN: Cellular',
+        'Online: online',
+        'Node: not configured, no alerts',
+      ].join('\n'));
+    }));
+
+  it('reports configured paths regardless of value age', () => handle({
+    'networking.wan.activeLabel': 'Cellular',
+    'networking.wan.state': 'online',
+  }, settings, {
+    'networking.wan.activeLabel': ago(7200),
+    'networking.wan.state': ago(7200),
+  })
+    .then((sent) => {
+      assert.ok(sent.includes('WAN: Cellular\nOnline: online'), sent);
+    }));
+
+  it('reports missing configured paths as unavailable', () => handle({
+    'networking.wan.activeLabel': 'Cellular',
+  }, settings)
+    .then((sent) => {
+      assert.ok(sent.includes('WAN: Cellular\nOnline: n/a'), sent);
+    }));
+
+  it('formats numbers, booleans and objects', () => handle({
+    'electrical.batteries.house.capacity.stateOfCharge': 0.8734,
+    'tanks.freshWater.0.currentLevel': 1,
+    'electrical.switches.anchorLight.state': true,
+    'navigation.position': { latitude: 60.1, longitude: 24.9 },
+  }, {
+    communications: {
+      status_paths: [
+        { path: 'electrical.batteries.house.capacity.stateOfCharge', label: 'SOC' },
+        { path: 'tanks.freshWater.0.currentLevel', label: 'Water' },
+        { path: 'electrical.switches.anchorLight.state', label: 'Anchor light' },
+        { path: 'navigation.position', label: 'Pos' },
+      ],
+    },
+  })
+    .then((sent) => {
+      assert.ok(sent.includes([
+        'SOC: 0.9',
+        'Water: 1',
+        'Anchor light: true',
+        'Pos: {"latitude":60.1,"longitude":24.9}',
+      ].join('\n')), sent);
+    }));
+});
+
 describe('status command node role', () => {
   const nodes = [
     { node: 1, role: 'crew' },

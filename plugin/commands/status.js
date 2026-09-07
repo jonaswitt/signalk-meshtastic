@@ -1,6 +1,11 @@
 const { Temporal } = require('@js-temporal/polyfill');
 
-const { anchorRadiusPath, nodeRole, sendAlerts } = require('../settings');
+const {
+  anchorRadiusPath,
+  nodeRole,
+  sendAlerts,
+  statusPaths,
+} = require('../settings');
 
 const RAD_TO_DEG = 180 / Math.PI;
 const MS_TO_KN = 1.9438444924406046;
@@ -101,6 +106,26 @@ function nodeStatus(msg, settings) {
   return `Node: crew, alerts ${sendAlerts(settings) ? 'on' : 'off'}`;
 }
 
+function formatValue(value) {
+  if (value === undefined || value === null || value === '') {
+    return 'n/a';
+  }
+  if (typeof value === 'number') {
+    return Number.isInteger(value) ? String(value) : value.toFixed(1);
+  }
+  if (typeof value === 'object') {
+    return JSON.stringify(value);
+  }
+  return String(value);
+}
+
+// Configured paths are typically state rather than sensor readings, like the
+// active WAN connection, so they are reported regardless of age
+function configuredStatus(app, settings) {
+  return statusPaths(settings)
+    .map(({ path, label }) => `${label}: ${formatValue(selfValue(app, path, NO_MAX_AGE))}`);
+}
+
 function stats(rows) {
   if (!rows.length) {
     return undefined;
@@ -166,6 +191,7 @@ module.exports = {
       if (history) {
         status.push(`Wind 10m: avg ${knots(history.tenMinutes.average)} max ${knots(history.tenMinutes.max)}kn`);
       }
+      status.push(...configuredStatus(app, settings));
       status.push(nodeStatus(msg, settings));
       return device.sendText(status.join('\n'), msg.from, true, false);
     }),

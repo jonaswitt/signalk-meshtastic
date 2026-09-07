@@ -6,6 +6,7 @@ const {
   anchorRadiusPath,
   nodeRole,
   sendAlerts,
+  statusPaths,
 } = require('../plugin/settings');
 
 describe('environment metrics interval', () => {
@@ -85,5 +86,42 @@ describe('send alerts', () => {
 
   it('is on when enabled', () => {
     assert.equal(sendAlerts({ communications: { send_alerts: true } }), true);
+  });
+});
+
+describe('status paths', () => {
+  it('is empty by default', () => {
+    assert.deepEqual(statusPaths({}), []);
+    assert.deepEqual(statusPaths({ communications: {} }), []);
+    assert.deepEqual(statusPaths({ communications: { status_paths: 'nope' } }), []);
+  });
+
+  it('returns the configured paths and labels', () => {
+    assert.deepEqual(statusPaths({
+      communications: {
+        status_paths: [
+          { path: 'networking.wan.activeLabel', label: 'WAN' },
+          { path: 'networking.wan.state', label: 'Online' },
+        ],
+      },
+    }), [
+      { path: 'networking.wan.activeLabel', label: 'WAN' },
+      { path: 'networking.wan.state', label: 'Online' },
+    ]);
+  });
+
+  it('falls back to the path as label and skips entries without a path', () => {
+    assert.deepEqual(statusPaths({
+      communications: {
+        status_paths: [
+          { path: ' networking.wan.state ', label: '  ' },
+          { label: 'Orphan' },
+          { path: '' },
+          null,
+        ],
+      },
+    }), [
+      { path: 'networking.wan.state', label: 'networking.wan.state' },
+    ]);
   });
 });
